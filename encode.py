@@ -2,12 +2,14 @@ import wave
 import numpy as np
 import math
 import struct
+import sys
 
 # Đường dẫn file
-cover_path = "24_bit_fixed.wav"
+cover_path = "cover_audio.wav"
 stego_path = "24_bit_fixed_LSB.wav"
 msg_path = "data.txt"
 continuous_duration = 0.2
+length_bits = 32  # Số bit dùng để lưu độ dài thông điệp (4 byte)
 
 def convertMsgToBin(m):
     """Chuyển thông điệp thành chuỗi bit nhị phân."""
@@ -78,6 +80,9 @@ def read_raw_data(cover):
             if rawdata[i] >= 2**23:
                 rawdata[i] -= 2**24
         rawdata = rawdata.tolist()
+    elif sample_width == 32:
+        fmt = str(frames * channels) + "i"
+        rawdata = list(struct.unpack(fmt, data))
     else:
         raise ValueError(f"Unsupported sample width: {sample_width} bits")
 
@@ -112,41 +117,50 @@ def count_availaible_slots(rawdata):
             cnt += 1
     return cnt
 
-def stego(cover, msg, nlsb):
+def encode(cover, msg, nlsb):
     """Nhúng thông điệp vào file WAV bằng kỹ thuật LSB."""
-    global para, channels, sample_width, frames, samples, mask, minByte, rate
+    global para, channels, sample_width, frames, samples, mask, minByte, rate, length_bits
+
     pre(cover)
 
     # Đọc dữ liệu thô
     rawdata = read_raw_data(cover)
 
+    # Chuyển thông điệp thành chuỗi bit
+    msg_bits = convertMsgToBin(msg)
+    msg_length = len(msg)  # Độ dài thông điệp (byte)
+    msg_length_bits = format(msg_length, '032b')  # Chuyển độ dài thành 32 bit
+
+    # Kết hợp độ dài và nội dung thông điệp
+    combined_bits = msg_length_bits + msg_bits
+    total_bits = len(combined_bits)
+
     # Tính toán không gian khả dụng
     availaible = count_availaible_slots(rawdata)
     slot_len = frames_continuous(continuous_duration)
-    nslots = math.ceil(len(msg) / (slot_len * nlsb))
+    nslots = math.ceil(total_bits / (slot_len * nlsb))
     skip = (availaible - (nslots * slot_len)) // (nslots - 1) if nslots > 1 else 0
     print("\nnslots", nslots, "\nslot_len", slot_len, "\navailaible", availaible, "\nskip", skip)
 
     cover_ind = 0
-    msg_ind = 0
+    bit_ind = 0
     res = []
     slot_ind = 0
 
-    # Nhúng dữ liệu
-    while msg_ind < len(msg) and cover_ind < len(rawdata):
+    # Nhúng dữ liệu (độ dài + thông điệp)
+    while bit_ind < total_bits and cover_ind < len(rawdata):
         if rawdata[cover_ind] == minByte:
             res.append(pack_sample(rawdata[cover_ind]))
             cover_ind += 1
             continue
 
-        # Lấy nlsb bit từ thông điệp
         curr = ""
         while len(curr) < nlsb:
-            if msg_ind < len(msg):
-                curr += msg[msg_ind]
+            if bit_ind < total_bits:
+                curr += combined_bits[bit_ind]
             else:
                 curr += "0"
-            msg_ind += 1
+            bit_ind += 1
         curr = int(curr, 2)
 
         # Xử lý dấu và nhúng dữ liệu
@@ -171,8 +185,7 @@ def stego(cover, msg, nlsb):
             cover_ind += 1
         slot_ind = 0
 
-    # Kiểm tra nếu thông điệp quá dài
-    if msg_ind < len(msg):
+    if bit_ind < total_bits:
         print("\nMessage length too long. Terminating process")
         return 0
 
@@ -187,7 +200,7 @@ def stego(cover, msg, nlsb):
     steg.writeframes(b"".join(res))
     steg.close()
 
-    print("\nStegonography complete. Data hidden in file", stego_path)
+    print("\nSteganography complete. Data hidden in file", stego_path)
     return 1
 
 if __name__ == "__main__":
@@ -206,8 +219,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("Size of message in bytes: ", len(msg))
-    msg = convertMsgToBin(msg)
-    print("Length of message in bits: ", len(msg))
+    print("Length of message in bits: ", len(msg) * 8)
 
     print("\nEnter number of LSBs to be used:")
     try:
@@ -219,7 +231,7 @@ if __name__ == "__main__":
         cover.close()
         sys.exit(1)
 
-    success = stego(cover, msg, nlsb)
+    success = encode(cover, msg, nlsb)
     cover.close()
 
     if not success:
