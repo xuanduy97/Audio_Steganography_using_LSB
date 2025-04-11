@@ -10,15 +10,18 @@ class SteganographyApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Audio Steganography with Hidden Length")
-        self.root.geometry("600x500")
+        self.root.geometry("600x400")
 
         # Biến lưu đường dẫn
         self.cover_path = tk.StringVar()
         self.stego_path = tk.StringVar()
         self.msg_path = tk.StringVar(value="data.txt")
         self.output_path = tk.StringVar(value="output.txt")
+        self.msg_result = tk.StringVar(value="")
+        self.progress_var = tk.DoubleVar(value=0)  # Biến điều khiển progressbar
         self.nlsb = tk.StringVar(value="2")
         self.continuous_duration = 0.2
+        self.progress_bar = ttk.Progressbar(self.root, variable=self.progress_var, maximum=100, length=300)
 
         # Số bit cố định để lưu độ dài thông điệp (4 byte = 32 bit)
         self.length_bits = 32
@@ -39,6 +42,8 @@ class SteganographyApp:
         notebook = ttk.Notebook(self.root)
         # Đặt notebook vào cửa sổ chính
         notebook.pack(fill="x", padx=10, pady=5)
+
+        tk.Label(self.root, textvariable=self.msg_result, bg=background_color).pack(fill="x", padx=10, pady=5)
 
         # Frame cho Encode
         encode_frame = tk.LabelFrame(notebook, text="Encode (Hide Message)", font=("Arial", 12), padx=10, pady=10)
@@ -75,13 +80,25 @@ class SteganographyApp:
 
         tk.Button(decode_frame, text="Decode", command=self.decode, bg="blue", fg="white").grid(row=3, column=1, pady=10)
 
+        # Config notebook
         notebook.add(encode_frame, text="Encode")
         notebook.add(decode_frame, text="Decode")
+
+        def on_tab_change(event):
+            self.msg_result.set("")
+            self.progress_bar.pack_forget()
+            self.root.update_idletasks()
+
+        notebook.bind("<<NotebookTabChanged>>", on_tab_change)
+
 
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
         if file_path:
+            result_path = file_path.split('/')
+            result_path = result_path[len(result_path) - 1].lower().replace('.wav', '_LSB.wav')
             self.cover_path.set(file_path)
+            self.stego_path.set(result_path)
 
     def browse_msg(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
@@ -191,6 +208,10 @@ class SteganographyApp:
         return cnt
 
     def encode(self):
+        self.msg_result.set("Progress...")
+        self.progress_bar.pack(pady=10)
+        self.progress_var.set(0)
+        self.root.update_idletasks()
         try:
             if not self.cover_path.get():
                 messagebox.showerror("Error", "Please select a cover WAV file.")
@@ -220,6 +241,9 @@ class SteganographyApp:
             msg_length = len(msg)  # Độ dài thông điệp (byte)
             msg_length_bits = format(msg_length, '032b')  # Chuyển độ dài thành 32 bit
 
+            self.progress_var.set(25)
+            self.root.update_idletasks()
+
             # Kết hợp độ dài và nội dung thông điệp
             combined_bits = msg_length_bits + msg_bits
             total_bits = len(combined_bits)
@@ -229,12 +253,15 @@ class SteganographyApp:
             slot_len = self.frames_continuous(self.continuous_duration)
             nslots = math.ceil(total_bits / (slot_len * self.nlsb_value))
             skip = (availaible - (nslots * slot_len)) // (nslots - 1) if nslots > 1 else 0
-            print("\nnslots", nslots, "\nslot_len", slot_len, "\navailaible", availaible, "\nskip", skip)
+            print(f"slots: {nslots} slot_len: {slot_len} availaible: {availaible} skip: {skip}")
 
             cover_ind = 0
             bit_ind = 0
             res = []
             slot_ind = 0
+
+            self.progress_var.set(50)
+            self.root.update_idletasks()
 
             # Nhúng dữ liệu (độ dài + thông điệp)
             while bit_ind < total_bits and cover_ind < len(rawdata):
@@ -274,8 +301,11 @@ class SteganographyApp:
                     cover_ind += 1
                 slot_ind = 0
 
+            self.progress_var.set(75)
+            self.root.update_idletasks()
+
             if bit_ind < total_bits:
-                print("\nMessage length too long. Terminating process")
+                print("Message length too long. Terminating process")
                 return 0
 
             # Ghi các mẫu còn lại
@@ -289,7 +319,12 @@ class SteganographyApp:
             steg.writeframes(b"".join(res))
             steg.close()
 
-            print("\nSteganography complete. Data hidden in file", self.stego_path.get())
+            print(f"Steganography complete. Data hidden in file {self.stego_path.get()}")
+            result_path = self.stego_path.get().split('/')
+            result_path = result_path[len(result_path) - 1]
+            self.msg_result.set(f"Steganography complete. Data hidden in file '{result_path}'")
+            self.progress_var.set(100)
+            self.root.update_idletasks()
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -299,6 +334,10 @@ class SteganographyApp:
                 steg.close()
 
     def decode(self):
+        self.msg_result.set("Progress...")
+        self.progress_bar.pack(pady=10)
+        self.progress_var.set(0)
+        self.root.update_idletasks()
         try:
             if not self.stego_path.get():
                 messagebox.showerror("Error", "Please select a stego WAV file.")
@@ -318,7 +357,6 @@ class SteganographyApp:
 
             # Đọc dữ liệu thô
             rawdata = self.read_raw_data(stego)
-
             # Tính toán không gian khả dụng
             availaible = self.count_availaible_slots(rawdata)
             slot_len = self.frames_continuous(self.continuous_duration)
@@ -339,6 +377,9 @@ class SteganographyApp:
                     bit_count += self.nlsb_value
                 stego_index += 1
 
+            self.progress_var.set(25)
+            self.root.update_idletasks()
+
             length_bits_extracted = length_bits_extracted[:self.length_bits]
             if len(length_bits_extracted) < self.length_bits:
                 print("Error: Not enough data to extract message length.")
@@ -351,7 +392,10 @@ class SteganographyApp:
             # Tính lại nslots và skip dựa trên độ dài thông điệp
             nslots = math.ceil((size_bits + self.length_bits) / (slot_len * self.nlsb_value))
             skip = (availaible - (nslots * slot_len)) // (nslots - 1) if nslots > 1 else 0
-            print("nslots", nslots, "skip", skip)
+            print(f"slots:{nslots} skip: {skip}")
+
+            self.progress_var.set(50)
+            self.root.update_idletasks()
 
             # Trích xuất nội dung thông điệp
             msg = ""
@@ -380,6 +424,9 @@ class SteganographyApp:
                     stego_index += 1
                 slot_ind = 0
 
+            self.progress_var.set(75)
+            self.root.update_idletasks()
+
             # Cắt chuỗi bit đúng kích thước
             msg = msg[:size_bits]
 
@@ -406,7 +453,10 @@ class SteganographyApp:
             # Ghi thông điệp vào file với encoding utf-8
             with open(self.output_path.get(), 'w', encoding='utf-8') as file:
                 file.write(dec_msg)
-            print("\nThe extracted message is written in", self.output_path.get())
+            print(f"The extracted message is written in: {self.output_path.get()}")
+            self.msg_result.set(f"The extracted message is written in: {self.output_path.get()}")
+            self.progress_var.set(100)
+            self.root.update_idletasks()
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
