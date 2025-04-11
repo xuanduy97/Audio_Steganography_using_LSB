@@ -150,6 +150,7 @@ class SteganographyApp:
             self.mask = (1 << 23) - (1 << self.nlsb_value)  # Mask cho 24-bit
             self.minByte = -(1 << 23)  # -8,388,608
         else:
+            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
             raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
 
     def read_raw_data(self, _auido):
@@ -179,7 +180,8 @@ class SteganographyApp:
                     rawdata[i] -= 2**24
             rawdata = rawdata.tolist()
         else:
-            raise ValueError(f"Unsupported sample width: {sample_width} bits")
+            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
+            raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
         return rawdata
 
     def pack_sample(self, value):
@@ -197,6 +199,7 @@ class SteganographyApp:
                 value += 2**24
             return struct.pack('<I', value)[:3]  # Lấy 3 byte thấp
         else:
+            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
             raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
 
     def count_availaible_slots(self, rawdata):
@@ -214,17 +217,21 @@ class SteganographyApp:
         self.root.update_idletasks()
         try:
             if not self.cover_path.get():
+                self.msg_result.set("Error: Please select a cover WAV file.")
                 messagebox.showerror("Error", "Please select a cover WAV file.")
                 return
             if not self.msg_path.get():
+                self.msg_result.set("Error: Please select a message file.")
                 messagebox.showerror("Error", "Please select a message file.")
                 return
             if not self.stego_path.get():
+                self.msg_result.set("Error: Please specify an output stego WAV file.")
                 messagebox.showerror("Error", "Please specify an output stego WAV file.")
                 return
 
             self.nlsb_value = int(self.nlsb.get())
             if self.nlsb_value <= 0:
+                self.msg_result.set("Error: Number of LSBs must be positive.")
                 raise ValueError("Number of LSBs must be positive.")
 
             cover = wave.open(self.cover_path.get(), "r")
@@ -327,6 +334,7 @@ class SteganographyApp:
             self.root.update_idletasks()
 
         except Exception as e:
+            self.msg_result.set(f"Error: {str(e)}.")
             messagebox.showerror("Error", str(e))
             if 'cover' in locals():
                 cover.close()
@@ -340,14 +348,17 @@ class SteganographyApp:
         self.root.update_idletasks()
         try:
             if not self.stego_path.get():
+                self.msg_result.set("Error: Please select a stego WAV file.")
                 messagebox.showerror("Error", "Please select a stego WAV file.")
                 return
             if not self.output_path.get():
+                self.msg_result.set("Error: Please specify an output text file.")
                 messagebox.showerror("Error", "Please specify an output text file.")
                 return
 
             self.nlsb_value = int(self.nlsb.get())
             if self.nlsb_value <= 0:
+                self.msg_result.set("Error: Number of LSBs must be positive.")
                 raise ValueError("Number of LSBs must be positive.")
 
             stego = wave.open(self.stego_path.get(), "r")
@@ -382,6 +393,7 @@ class SteganographyApp:
 
             length_bits_extracted = length_bits_extracted[:self.length_bits]
             if len(length_bits_extracted) < self.length_bits:
+                self.msg_result.set("Error: Not enough data to extract message length.")
                 print("Error: Not enough data to extract message length.")
                 return
 
@@ -433,6 +445,7 @@ class SteganographyApp:
             # Chuyển chuỗi bit thành ký tự
             val = len(msg) // 8
             if val == 0:
+                self.msg_result.set("Error: No message extracted.")
                 print("Error: No message extracted.")
                 return
 
@@ -459,6 +472,7 @@ class SteganographyApp:
             self.root.update_idletasks()
 
         except Exception as e:
+            self.msg_result.set(f"Error: {str(e)}.")
             messagebox.showerror("Error", str(e))
             if 'stego' in locals():
                 stego.close()
