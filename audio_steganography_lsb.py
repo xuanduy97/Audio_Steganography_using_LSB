@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import wave
 import numpy as np
 import math
@@ -14,8 +14,8 @@ class SteganographyApp:
 
         # Biến lưu đường dẫn
         self.cover_path = tk.StringVar()
-        self.stego_path = tk.StringVar(value="stego_audio_LSB.wav")
-        self.msg_path = tk.StringVar()
+        self.stego_path = tk.StringVar()
+        self.msg_path = tk.StringVar(value="data.txt")
         self.output_path = tk.StringVar(value="output.txt")
         self.nlsb = tk.StringVar(value="2")
         self.continuous_duration = 0.2
@@ -27,12 +27,21 @@ class SteganographyApp:
         self.create_widgets()
 
     def create_widgets(self):
+        background_color = "gray90"
         # Tiêu đề
-        tk.Label(self.root, text="Audio Steganography", font=("Arial", 16, "bold")).pack(pady=10)
+        tk.Label(self.root, text="Audio Steganography", font=("Arial", 16, "bold"), bg=background_color).pack(pady=10)
+        style = ttk.Style()
+        self.root.configure(bg=background_color)
+        style.configure("TNotebook", background=background_color)
+        style.configure("TNotebook.Tab",
+                        padding=[10, 5], 
+                        font=("Times New Roman", 16))  # Font mới cho tabbar
+        notebook = ttk.Notebook(self.root)
+        # Đặt notebook vào cửa sổ chính
+        notebook.pack(fill="x", padx=10, pady=5)
 
         # Frame cho Encode
-        encode_frame = tk.LabelFrame(self.root, text="Encode (Hide Message)", font=("Arial", 12), padx=10, pady=10)
-        encode_frame.pack(fill="x", padx=10, pady=5)
+        encode_frame = tk.LabelFrame(notebook, text="Encode (Hide Message)", font=("Arial", 12), padx=10, pady=10)
 
         tk.Label(encode_frame, text="Cover WAV File:").grid(row=0, column=0, sticky="w", pady=5)
         tk.Entry(encode_frame, textvariable=self.cover_path, width=40).grid(row=0, column=1, padx=5)
@@ -51,10 +60,10 @@ class SteganographyApp:
         tk.Button(encode_frame, text="Encode", command=self.encode, bg="green", fg="white").grid(row=4, column=1, pady=10)
 
         # Frame cho Decode
-        decode_frame = tk.LabelFrame(self.root, text="Decode (Extract Message)", font=("Arial", 12), padx=10, pady=10)
-        decode_frame.pack(fill="x", padx=10, pady=5)
+        decode_frame = tk.LabelFrame(notebook, text="Decode (Extract Message)", font=("Arial", 12), padx=10, pady=10)
 
         tk.Label(decode_frame, text="Stego WAV File:").grid(row=0, column=0, sticky="w", pady=5)
+
         tk.Entry(decode_frame, textvariable=self.stego_path, width=40).grid(row=0, column=1, padx=5)
         tk.Button(decode_frame, text="Browse", command=self.browse_stego).grid(row=0, column=2, padx=5)
 
@@ -65,6 +74,9 @@ class SteganographyApp:
         tk.Entry(decode_frame, textvariable=self.nlsb, width=10).grid(row=2, column=1, sticky="w", padx=5)
 
         tk.Button(decode_frame, text="Decode", command=self.decode, bg="blue", fg="white").grid(row=3, column=1, pady=10)
+
+        notebook.add(encode_frame, text="Encode")
+        notebook.add(decode_frame, text="Decode")
 
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -151,7 +163,6 @@ class SteganographyApp:
             rawdata = rawdata.tolist()
         else:
             raise ValueError(f"Unsupported sample width: {sample_width} bits")
-
         return rawdata
 
     def pack_sample(self, value):
