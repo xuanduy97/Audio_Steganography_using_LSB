@@ -1,0 +1,3 @@
+Test data Steganography.
+This is one of many data hiding techniques, which aim to transmit a message over a channel where some other type of information is already being transmitted.
+This distinguishes steganography from covert channel techniques, which instead attempt to transmit data between two previously unconnected entities.
