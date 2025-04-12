@@ -91,7 +91,6 @@ class SteganographyApp:
 
         notebook.bind("<<NotebookTabChanged>>", on_tab_change)
 
-
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
         if file_path:
@@ -109,6 +108,12 @@ class SteganographyApp:
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
         if file_path:
             self.stego_path.set(file_path)
+
+    def show_error_msg(self, error_msg):
+        self.progress_bar.pack_forget()
+        self.msg_result.set(f"Error: {error_msg}")
+        self.root.update_idletasks()
+        raise ValueError(f"{error_msg}")
 
     def convertMsgToBin(self, m):
         """Chuyển thông điệp thành chuỗi bit nhị phân."""
@@ -150,8 +155,7 @@ class SteganographyApp:
             self.mask = (1 << 23) - (1 << self.nlsb_value)  # Mask cho 24-bit
             self.minByte = -(1 << 23)  # -8,388,608
         else:
-            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
-            raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
+            self.show_error_msg(f"Unsupported sample width: {self.sample_width} bits")
 
     def read_raw_data(self, _auido):
         """Đọc dữ liệu thô từ file WAV và chuyển thành mảng số."""
@@ -180,8 +184,7 @@ class SteganographyApp:
                     rawdata[i] -= 2**24
             rawdata = rawdata.tolist()
         else:
-            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
-            raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
+            self.show_error_msg(f"Unsupported sample width: {self.sample_width} bits")
         return rawdata
 
     def pack_sample(self, value):
@@ -199,8 +202,7 @@ class SteganographyApp:
                 value += 2**24
             return struct.pack('<I', value)[:3]  # Lấy 3 byte thấp
         else:
-            self.msg_result.set(f"Unsupported sample width: {self.sample_width} bits")
-            raise ValueError(f"Unsupported sample width: {self.sample_width} bits")
+            self.show_error_msg(f"Unsupported sample width: {self.sample_width} bits")
 
     def count_availaible_slots(self, rawdata):
         """Đếm số mẫu có thể dùng để nhúng dữ liệu."""
@@ -212,27 +214,21 @@ class SteganographyApp:
 
     def encode(self):
         self.msg_result.set("Progress...")
+        self.progress_bar.pack_forget()
         self.progress_bar.pack(pady=10)
         self.progress_var.set(0)
         self.root.update_idletasks()
         try:
             if not self.cover_path.get():
-                self.msg_result.set("Error: Please select a cover WAV file.")
-                messagebox.showerror("Error", "Please select a cover WAV file.")
-                return
+                self.show_error_msg("Please select a cover WAV file.")
             if not self.msg_path.get():
-                self.msg_result.set("Error: Please select a message file.")
-                messagebox.showerror("Error", "Please select a message file.")
-                return
+                self.show_error_msg("Please select a message file.")
             if not self.stego_path.get():
-                self.msg_result.set("Error: Please specify an output stego WAV file.")
-                messagebox.showerror("Error", "Please specify an output stego WAV file.")
-                return
+                self.show_error_msg("Please specify an output stego WAV file.")
 
             self.nlsb_value = int(self.nlsb.get())
             if self.nlsb_value <= 0:
-                self.msg_result.set("Error: Number of LSBs must be positive.")
-                raise ValueError("Number of LSBs must be positive.")
+                self.show_error_msg("Number of LSBs must be positive.")
 
             cover = wave.open(self.cover_path.get(), "r")
             with open(self.msg_path.get(), 'r') as file:
@@ -312,7 +308,7 @@ class SteganographyApp:
             self.root.update_idletasks()
 
             if bit_ind < total_bits:
-                print("Message length too long. Terminating process")
+                self.show_error_msg("Message length too long. Please increase Number of LSBs.")
                 return 0
 
             # Ghi các mẫu còn lại
@@ -343,23 +339,18 @@ class SteganographyApp:
 
     def decode(self):
         self.msg_result.set("Progress...")
+        self.progress_bar.pack_forget()
         self.progress_bar.pack(pady=10)
         self.progress_var.set(0)
         self.root.update_idletasks()
         try:
             if not self.stego_path.get():
-                self.msg_result.set("Error: Please select a stego WAV file.")
-                messagebox.showerror("Error", "Please select a stego WAV file.")
-                return
+                self.show_error_msg("Please select a stego WAV file.")
             if not self.output_path.get():
-                self.msg_result.set("Error: Please specify an output text file.")
-                messagebox.showerror("Error", "Please specify an output text file.")
-                return
-
+                self.show_error_msg("Please specify an output text file.")
             self.nlsb_value = int(self.nlsb.get())
             if self.nlsb_value <= 0:
-                self.msg_result.set("Error: Number of LSBs must be positive.")
-                raise ValueError("Number of LSBs must be positive.")
+                self.show_error_msg("Number of LSBs must be positive.")
 
             stego = wave.open(self.stego_path.get(), "r")
             """Trích xuất thông điệp từ file WAV, tự động đọc độ dài."""
@@ -445,7 +436,7 @@ class SteganographyApp:
             # Chuyển chuỗi bit thành ký tự
             val = len(msg) // 8
             if val == 0:
-                self.msg_result.set("Error: No message extracted.")
+                self.show_error_msg("No message extracted.")
                 print("Error: No message extracted.")
                 return
 
