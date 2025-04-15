@@ -1,14 +1,16 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import wave
-import numpy as np
-import math
-import struct
 import sys
 import os
+import time
+import math
+import wave
+import struct
+import pygame
 import librosa
 import librosa.display
+import numpy as np
+import tkinter as tk
 import matplotlib.pyplot as plt
+from tkinter import filedialog, messagebox, ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class SteganographyApp:
@@ -28,6 +30,13 @@ class SteganographyApp:
         self.continuous_duration = 0.2
         # Số bit cố định để lưu độ dài thông điệp (4 byte = 32 bit)
         self.length_bits = 32
+
+        # Audio state
+        self.audio_file = None
+        self.audio_duration = 0
+        self.start_time = 0
+        self.is_paused = False
+        self.is_playing = False
 
         # Giao diện
         self.create_widgets()
@@ -98,8 +107,8 @@ class SteganographyApp:
         graph_sub_frame.pack(pady=10)
         # Button to load audio file
         tk.Button(graph_sub_frame, text="Load WAV File (Ori & Stego)", command=self.load_audio_file).pack(side=tk.LEFT, padx=10)
-        tk.Button(graph_sub_frame, text="Plot Overlay", command=self.plot_waveforms).pack(side=tk.RIGHT, padx=10)
-
+        self.play_overplay = tk.Button(graph_sub_frame, text="Plot Overlay", command=self.plot_waveforms, state=tk.DISABLED)
+        self.play_overplay.pack(side=tk.RIGHT, padx=10)
         # Create a Matplotlib figure
         self.figure, self.ax = plt.subplots(figsize=(10, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=graph_frame)
@@ -111,11 +120,18 @@ class SteganographyApp:
         play_sub_frame_2 = tk.Frame(play_frame)
         play_sub_frame_1.pack()
         play_sub_frame_2.pack()
-        tk.Button(play_sub_frame_1, text="Load Original File", command=self.play_audio).pack(side=tk.LEFT, padx=10)
-        tk.Button(play_sub_frame_1, text="Load Steganography File", command=self.play_audio).pack(side=tk.RIGHT, padx=10)
-        tk.Button(play_sub_frame_2, text="Play", command=self.play_audio, state=tk.DISABLED).grid(row=0, column=0, padx=5, pady=5)
-        tk.Button(play_sub_frame_2, text="Pause", command=self.pause_audio, state=tk.DISABLED).grid(row=0, column=1, padx=5, pady=5)
-        tk.Button(play_sub_frame_2, text="Stop", command=self.stop_audio, state=tk.DISABLED).grid(row=0, column=2, padx=5, pady=5)
+
+        # Initialize pygame mixer
+        pygame.mixer.init()
+
+        tk.Button(play_sub_frame_1, text="Load Original File", command=self.load_ori_audio).pack(side=tk.LEFT, padx=10)
+        tk.Button(play_sub_frame_1, text="Load Steganography File", command=self.load_stego_audio).pack(side=tk.RIGHT, padx=10)
+        self.play_button = tk.Button(play_sub_frame_2, text="Play", command=self.play_audio, state=tk.DISABLED)
+        self.play_button.grid(row=0, column=0, padx=5, pady=5)
+        self.pause_button = tk.Button(play_sub_frame_2, text="Pause", command=self.pause_audio, state=tk.DISABLED)
+        self.pause_button.grid(row=0, column=1, padx=5, pady=5)
+        self.stop_button = tk.Button(play_sub_frame_2, text="Stop", command=self.stop_audio, state=tk.DISABLED)
+        self.stop_button.grid(row=0, column=2, padx=5, pady=5)
 
         # Progress bar (Scale widget)
         self.progress = tk.Scale(play_frame, from_=0, to=100, orient=tk.HORIZONTAL, length=300, label="Playback Time (seconds)", state=tk.DISABLED)
@@ -132,7 +148,10 @@ class SteganographyApp:
     def on_tab_change(self, event):
         self.msg_result.set("")
         self.progress_var.set(0)
+        self.play_overplay.config(state=tk.DISABLED)
+        self.disable_buttons()
         self.root.update_idletasks()
+        self.stop_audio()
     
     def load_audio_file(self):
         file_path = self.cover_path.get()
@@ -152,6 +171,7 @@ class SteganographyApp:
                 tk.messagebox.showerror("Error", f"Failed to load Steganography audio: {str(e)}")
         else :
             tk.messagebox.showerror("Error", f"Steganography audio is not exists.\nPlease encode to get Steganography audio.")
+        self.play_overplay.config(state=tk.NORMAL)
         tk.messagebox.showinfo("Success", "Original audio & Steganography audio loaded.")
 
     def plot_waveforms(self):
@@ -189,19 +209,123 @@ class SteganographyApp:
         except Exception as e:
             tk.messagebox.showerror("Error", f"Failed to plot waveforms: {str(e)}")
     
-    def load_audio(self):
-        print('load_audio')
+    def load_ori_audio(self):
+        self.stop_audio()
+        file_path = self.cover_path.get()
+        if file_path and os.path.exists(file_path):
+            try:
+                # Load audio with pygame
+                pygame.mixer.music.load(file_path)
+                # Get duration with librosa
+                self.audio_duration = librosa.get_duration(filename=file_path)
+                self.audio_file = file_path
+                self.progress.config(to=self.audio_duration, state=tk.NORMAL)
+                self.progress.set(0)
+                self.play_button.config(state=tk.NORMAL)
+                self.pause_button.config(state=tk.DISABLED)
+                self.stop_button.config(state=tk.DISABLED)
+                tk.messagebox.showinfo("Success", f"Original Audio loaded. Duration: {self.audio_duration:.1f} seconds")
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to load Original Audio: {str(e)}")
+                self.audio_file = None
+                self.disable_buttons()
+        else:
+            tk.messagebox.showwarning("Warning", "No file selected or file does not exist.")
+            self.audio_file = None
+            self.disable_buttons()
+    
+    def load_stego_audio(self):
+        self.stop_audio()
+        file_path = self.stego_path.get()
+        if file_path and os.path.exists(file_path):
+            try:
+                # Load audio with pygame
+                pygame.mixer.music.load(file_path)
+                # Get duration with librosa
+                self.audio_duration = librosa.get_duration(filename=file_path)
+                self.audio_file = file_path
+                self.progress.config(to=self.audio_duration, state=tk.NORMAL)
+                self.progress.set(0)
+                self.play_button.config(state=tk.NORMAL)
+                self.pause_button.config(state=tk.DISABLED)
+                self.stop_button.config(state=tk.DISABLED)
+                tk.messagebox.showinfo("Success", f"Steganography Audio loaded. Duration: {self.audio_duration:.1f} seconds")
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to load Steganography Audio: {str(e)}")
+                self.audio_file = None
+                self.disable_buttons()
+        else:
+            tk.messagebox.showwarning("Warning", "No file selected or file does not exist.")
+            self.audio_file = None
+            self.disable_buttons()
 
     def play_audio(self):
-        print('play_audio')
-        
+        if self.audio_file:
+            try:
+                if self.is_paused:
+                    # Resume playback
+                    pygame.mixer.music.unpause()
+                    self.is_paused = False
+                    self.start_time += time.time() - self.pause_time  # Adjust start time
+                else:
+                    # Start playback
+                    pygame.mixer.music.load(self.audio_file)
+                    pygame.mixer.music.play()
+                    self.start_time = time.time()
+                self.is_playing = True
+                self.play_button.config(state=tk.DISABLED)
+                self.pause_button.config(state=tk.NORMAL)
+                self.stop_button.config(state=tk.NORMAL)
+                # Start updating progress bar
+                self.update_progress()
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to play audio: {str(e)}")
+                self.disable_buttons()
 
     def pause_audio(self):
-        print('pause_audio')
-        
+        if self.audio_file and not self.is_paused:
+            try:
+                pygame.mixer.music.pause()
+                self.is_paused = True
+                self.pause_time = time.time()
+                self.is_playing = False
+                self.play_button.config(state=tk.NORMAL)
+                self.pause_button.config(state=tk.DISABLED)
+                self.stop_button.config(state=tk.NORMAL)
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to pause audio: {str(e)}")
 
     def stop_audio(self):
-        print('stop_audio')
+        if self.audio_file:
+            try:
+                pygame.mixer.music.stop()
+                self.is_paused = False
+                self.is_playing = False
+                self.progress.set(0)
+                self.play_button.config(state=tk.NORMAL)
+                self.pause_button.config(state=tk.DISABLED)
+                self.stop_button.config(state=tk.DISABLED)
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to stop audio: {str(e)}")
+
+    def update_progress(self):
+        if self.is_playing:
+            # Estimate current time
+            elapsed = time.time() - self.start_time
+            if elapsed <= self.audio_duration:
+                self.progress.set(elapsed)
+            else:
+                # Audio finished
+                self.stop_audio()
+            # Schedule next update
+            self.root.after(100, self.update_progress)  # Update every 100ms
+
+    def disable_buttons(self):
+        self.play_button.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.DISABLED)
+        self.progress.config(state=tk.DISABLED)
+        self.progress.set(0)
 
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -437,6 +561,7 @@ class SteganographyApp:
             self.msg_result.set(f"Steganography complete. Data hidden in file '{result_path}'")
             self.progress_var.set(100)
             self.root.update_idletasks()
+            tk.messagebox.showinfo("Success", f"Steganography complete. Data hidden in file '{result_path}'")
 
         except Exception as e:
             self.msg_result.set(f"Error: {str(e)}.")
@@ -568,6 +693,7 @@ class SteganographyApp:
             self.msg_result.set(f"The extracted message is written in: {self.output_path.get()}")
             self.progress_var.set(100)
             self.root.update_idletasks()
+            tk.messagebox.showinfo("Success", f"The extracted message is written in: {self.output_path.get()}")
 
         except Exception as e:
             self.msg_result.set(f"Error: {str(e)}.")
