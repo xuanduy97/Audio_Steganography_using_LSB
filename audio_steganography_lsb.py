@@ -5,6 +5,7 @@ import numpy as np
 import math
 import struct
 import sys
+import os
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ class SteganographyApp:
         self.output_path = tk.StringVar(value="output.txt")
         self.msg_result = tk.StringVar(value="")
         self.progress_var = tk.DoubleVar(value=0)  # Biến điều khiển progressbar
-        self.nlsb = tk.StringVar(value="2")
+        self.nlsb = tk.StringVar(value="1")
         self.continuous_duration = 0.2
         # Số bit cố định để lưu độ dài thông điệp (4 byte = 32 bit)
         self.length_bits = 32
@@ -65,7 +66,7 @@ class SteganographyApp:
         tk.Label(encode_sub_frame, text="Number of LSBs:").grid(row=3, column=0, sticky="w", pady=5)
         tk.Entry(encode_sub_frame, textvariable=self.nlsb, width=10).grid(row=3, column=1, sticky="w", padx=5)
 
-        tk.Button(encode_sub_frame, text="Encode", command=self.encode, bg="green", fg="white").grid(row=4, column=1, pady=10)
+        tk.Button(encode_frame, text="Encode", command=self.encode, bg="green", fg="white").pack(pady=10)
 
         tk.Label(encode_frame, textvariable=self.msg_result).pack(fill="x", padx=10, pady=5)
         ttk.Progressbar(encode_frame, variable=self.progress_var, maximum=100, length=300).pack(pady=10)
@@ -86,7 +87,7 @@ class SteganographyApp:
         tk.Label(decode_sub_frame, text="Number of LSBs:").grid(row=2, column=0, sticky="w", pady=5)
         tk.Entry(decode_sub_frame, textvariable=self.nlsb, width=10).grid(row=2, column=1, sticky="w", padx=5)
 
-        tk.Button(decode_sub_frame, text="Decode", command=self.decode, bg="blue", fg="white").grid(row=3, column=1, pady=10)
+        tk.Button(decode_frame, text="Decode", command=self.decode, bg="blue", fg="white").pack(pady=10)
 
         tk.Label(decode_frame, textvariable=self.msg_result).pack(fill="x", padx=10, pady=5)
         ttk.Progressbar(decode_frame, variable=self.progress_var, maximum=100, length=300).pack(pady=10)
@@ -96,7 +97,7 @@ class SteganographyApp:
         graph_sub_frame = tk.Frame(graph_frame)
         graph_sub_frame.pack(pady=10)
         # Button to load audio file
-        tk.Button(graph_sub_frame, text="Load WAV File", command=self.load_audio_file).pack(side=tk.LEFT, padx=10)
+        tk.Button(graph_sub_frame, text="Load WAV File (Ori & Stego)", command=self.load_audio_file).pack(side=tk.LEFT, padx=10)
         tk.Button(graph_sub_frame, text="Plot Overlay", command=self.plot_waveforms).pack(side=tk.RIGHT, padx=10)
 
         # Create a Matplotlib figure
@@ -106,6 +107,19 @@ class SteganographyApp:
 
         # Frame cho Play Audio
         play_frame = tk.LabelFrame(notebook, text="Play Audio (After Encode)", font=("Arial", 12), padx=10, pady=10)
+        play_sub_frame_1 = tk.Frame(play_frame)
+        play_sub_frame_2 = tk.Frame(play_frame)
+        play_sub_frame_1.pack()
+        play_sub_frame_2.pack()
+        tk.Button(play_sub_frame_1, text="Load Original File", command=self.play_audio).pack(side=tk.LEFT, padx=10)
+        tk.Button(play_sub_frame_1, text="Load Steganography File", command=self.play_audio).pack(side=tk.RIGHT, padx=10)
+        tk.Button(play_sub_frame_2, text="Play", command=self.play_audio, state=tk.DISABLED).grid(row=0, column=0, padx=5, pady=5)
+        tk.Button(play_sub_frame_2, text="Pause", command=self.pause_audio, state=tk.DISABLED).grid(row=0, column=1, padx=5, pady=5)
+        tk.Button(play_sub_frame_2, text="Stop", command=self.stop_audio, state=tk.DISABLED).grid(row=0, column=2, padx=5, pady=5)
+
+        # Progress bar (Scale widget)
+        self.progress = tk.Scale(play_frame, from_=0, to=100, orient=tk.HORIZONTAL, length=300, label="Playback Time (seconds)", state=tk.DISABLED)
+        self.progress.pack(pady=5)
 
         # Config notebook
         notebook.add(encode_frame, text="Encode")
@@ -122,21 +136,23 @@ class SteganographyApp:
     
     def load_audio_file(self):
         file_path = self.cover_path.get()
-        print(file_path)
-        if file_path:
+        if os.path.exists(file_path):
             try:
                 self.audio1, self.sr1 = librosa.load(file_path)
-                tk.messagebox.showinfo("Success", "Original audio loaded.")
+                
             except Exception as e:
                 tk.messagebox.showerror("Error", f"Failed to load Original audio: {str(e)}")
+        else :
+            tk.messagebox.showerror("Error", f"Original audio is not exists.")
         file_path = self.stego_path.get()
-        print(file_path)
-        if file_path:
+        if os.path.exists(file_path):
             try:
                 self.audio2, self.sr2 = librosa.load(file_path)
-                tk.messagebox.showinfo("Success", "Steganography audio loaded.")
             except Exception as e:
                 tk.messagebox.showerror("Error", f"Failed to load Steganography audio: {str(e)}")
+        else :
+            tk.messagebox.showerror("Error", f"Steganography audio is not exists.\nPlease encode to get Steganography audio.")
+        tk.messagebox.showinfo("Success", "Original audio & Steganography audio loaded.")
 
     def plot_waveforms(self):
         if self.audio1 is None or self.audio2 is None:
@@ -172,6 +188,20 @@ class SteganographyApp:
 
         except Exception as e:
             tk.messagebox.showerror("Error", f"Failed to plot waveforms: {str(e)}")
+    
+    def load_audio(self):
+        print('load_audio')
+
+    def play_audio(self):
+        print('play_audio')
+        
+
+    def pause_audio(self):
+        print('pause_audio')
+        
+
+    def stop_audio(self):
+        print('stop_audio')
 
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
