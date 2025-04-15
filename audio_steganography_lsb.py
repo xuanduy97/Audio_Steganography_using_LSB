@@ -5,6 +5,10 @@ import numpy as np
 import math
 import struct
 import sys
+import librosa
+import librosa.display
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class SteganographyApp:
     def __init__(self, root):
@@ -21,8 +25,6 @@ class SteganographyApp:
         self.progress_var = tk.DoubleVar(value=0)  # Biến điều khiển progressbar
         self.nlsb = tk.StringVar(value="2")
         self.continuous_duration = 0.2
-        self.progress_bar = ttk.Progressbar(self.root, variable=self.progress_var, maximum=100, length=300)
-
         # Số bit cố định để lưu độ dài thông điệp (4 byte = 32 bit)
         self.length_bits = 32
 
@@ -43,53 +45,133 @@ class SteganographyApp:
         # Đặt notebook vào cửa sổ chính
         notebook.pack(fill="x", padx=10, pady=5)
 
-        tk.Label(self.root, textvariable=self.msg_result, bg=background_color).pack(fill="x", padx=10, pady=5)
-
         # Frame cho Encode
         encode_frame = tk.LabelFrame(notebook, text="Encode (Hide Message)", font=("Arial", 12), padx=10, pady=10)
 
-        tk.Label(encode_frame, text="Cover WAV File:").grid(row=0, column=0, sticky="w", pady=5)
-        tk.Entry(encode_frame, textvariable=self.cover_path, width=40).grid(row=0, column=1, padx=5)
-        tk.Button(encode_frame, text="Browse", command=self.browse_cover).grid(row=0, column=2, padx=5)
+        encode_sub_frame = tk.Frame(encode_frame)
+        encode_sub_frame.pack()
 
-        tk.Label(encode_frame, text="Message File (Text):").grid(row=1, column=0, sticky="w", pady=5)
-        tk.Entry(encode_frame, textvariable=self.msg_path, width=40).grid(row=1, column=1, padx=5)
-        tk.Button(encode_frame, text="Browse", command=self.browse_msg).grid(row=1, column=2, padx=5)
+        tk.Label(encode_sub_frame, text="Cover WAV File:").grid(row=0, column=0, sticky="w", pady=5)
+        tk.Entry(encode_sub_frame, textvariable=self.cover_path, width=40).grid(row=0, column=1, padx=5)
+        tk.Button(encode_sub_frame, text="Browse", command=self.browse_cover).grid(row=0, column=2, padx=5)
 
-        tk.Label(encode_frame, text="Output Stego WAV File:").grid(row=2, column=0, sticky="w", pady=5)
-        tk.Entry(encode_frame, textvariable=self.stego_path, width=40).grid(row=2, column=1, padx=5)
+        tk.Label(encode_sub_frame, text="Message File (Text):").grid(row=1, column=0, sticky="w", pady=5)
+        tk.Entry(encode_sub_frame, textvariable=self.msg_path, width=40).grid(row=1, column=1, padx=5)
+        tk.Button(encode_sub_frame, text="Browse", command=self.browse_msg).grid(row=1, column=2, padx=5)
 
-        tk.Label(encode_frame, text="Number of LSBs:").grid(row=3, column=0, sticky="w", pady=5)
-        tk.Entry(encode_frame, textvariable=self.nlsb, width=10).grid(row=3, column=1, sticky="w", padx=5)
+        tk.Label(encode_sub_frame, text="Output Stego WAV File:").grid(row=2, column=0, sticky="w", pady=5)
+        tk.Entry(encode_sub_frame, textvariable=self.stego_path, width=40).grid(row=2, column=1, padx=5)
 
-        tk.Button(encode_frame, text="Encode", command=self.encode, bg="green", fg="white").grid(row=4, column=1, pady=10)
+        tk.Label(encode_sub_frame, text="Number of LSBs:").grid(row=3, column=0, sticky="w", pady=5)
+        tk.Entry(encode_sub_frame, textvariable=self.nlsb, width=10).grid(row=3, column=1, sticky="w", padx=5)
 
+        tk.Button(encode_sub_frame, text="Encode", command=self.encode, bg="green", fg="white").grid(row=4, column=1, pady=10)
+
+        tk.Label(encode_frame, textvariable=self.msg_result).pack(fill="x", padx=10, pady=5)
+        ttk.Progressbar(encode_frame, variable=self.progress_var, maximum=100, length=300).pack(pady=10)
+        
         # Frame cho Decode
         decode_frame = tk.LabelFrame(notebook, text="Decode (Extract Message)", font=("Arial", 12), padx=10, pady=10)
+        decode_sub_frame = tk.Frame(decode_frame)
+        decode_sub_frame.pack()
 
-        tk.Label(decode_frame, text="Stego WAV File:").grid(row=0, column=0, sticky="w", pady=5)
+        tk.Label(decode_sub_frame, text="Stego WAV File:").grid(row=0, column=0, sticky="w", pady=5)
 
-        tk.Entry(decode_frame, textvariable=self.stego_path, width=40).grid(row=0, column=1, padx=5)
-        tk.Button(decode_frame, text="Browse", command=self.browse_stego).grid(row=0, column=2, padx=5)
+        tk.Entry(decode_sub_frame, textvariable=self.stego_path, width=40).grid(row=0, column=1, padx=5)
+        tk.Button(decode_sub_frame, text="Browse", command=self.browse_stego).grid(row=0, column=2, padx=5)
 
-        tk.Label(decode_frame, text="Output Text File:").grid(row=1, column=0, sticky="w", pady=5)
-        tk.Entry(decode_frame, textvariable=self.output_path, width=40).grid(row=1, column=1, padx=5)
+        tk.Label(decode_sub_frame, text="Output Text File:").grid(row=1, column=0, sticky="w", pady=5)
+        tk.Entry(decode_sub_frame, textvariable=self.output_path, width=40).grid(row=1, column=1, padx=5)
 
-        tk.Label(decode_frame, text="Number of LSBs:").grid(row=2, column=0, sticky="w", pady=5)
-        tk.Entry(decode_frame, textvariable=self.nlsb, width=10).grid(row=2, column=1, sticky="w", padx=5)
+        tk.Label(decode_sub_frame, text="Number of LSBs:").grid(row=2, column=0, sticky="w", pady=5)
+        tk.Entry(decode_sub_frame, textvariable=self.nlsb, width=10).grid(row=2, column=1, sticky="w", padx=5)
 
-        tk.Button(decode_frame, text="Decode", command=self.decode, bg="blue", fg="white").grid(row=3, column=1, pady=10)
+        tk.Button(decode_sub_frame, text="Decode", command=self.decode, bg="blue", fg="white").grid(row=3, column=1, pady=10)
+
+        tk.Label(decode_frame, textvariable=self.msg_result).pack(fill="x", padx=10, pady=5)
+        ttk.Progressbar(decode_frame, variable=self.progress_var, maximum=100, length=300).pack(pady=10)
+
+        # Frame cho Graph
+        graph_frame = tk.LabelFrame(notebook, text="Graph (After Encode, Compair Audio)", font=("Arial", 12), padx=10, pady=10)
+        graph_sub_frame = tk.Frame(graph_frame)
+        graph_sub_frame.pack(pady=10)
+        # Button to load audio file
+        tk.Button(graph_sub_frame, text="Load WAV File", command=self.load_audio_file).pack(side=tk.LEFT, padx=10)
+        tk.Button(graph_sub_frame, text="Plot Overlay", command=self.plot_waveforms).pack(side=tk.RIGHT, padx=10)
+
+        # Create a Matplotlib figure
+        self.figure, self.ax = plt.subplots(figsize=(10, 6))
+        self.canvas = FigureCanvasTkAgg(self.figure, master=graph_frame)
+        self.canvas.get_tk_widget().pack()
+
+        # Frame cho Play Audio
+        play_frame = tk.LabelFrame(notebook, text="Play Audio (After Encode)", font=("Arial", 12), padx=10, pady=10)
 
         # Config notebook
         notebook.add(encode_frame, text="Encode")
         notebook.add(decode_frame, text="Decode")
+        notebook.add(graph_frame, text="Graph")
+        notebook.add(play_frame, text="Play Audio")
 
-        def on_tab_change(event):
-            self.msg_result.set("")
-            self.progress_bar.pack_forget()
-            self.root.update_idletasks()
+        notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
 
-        notebook.bind("<<NotebookTabChanged>>", on_tab_change)
+    def on_tab_change(self, event):
+        self.msg_result.set("")
+        self.progress_var.set(0)
+        self.root.update_idletasks()
+    
+    def load_audio_file(self):
+        file_path = self.cover_path.get()
+        print(file_path)
+        if file_path:
+            try:
+                self.audio1, self.sr1 = librosa.load(file_path)
+                tk.messagebox.showinfo("Success", "Original audio loaded.")
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to load Original audio: {str(e)}")
+        file_path = self.stego_path.get()
+        print(file_path)
+        if file_path:
+            try:
+                self.audio2, self.sr2 = librosa.load(file_path)
+                tk.messagebox.showinfo("Success", "Steganography audio loaded.")
+            except Exception as e:
+                tk.messagebox.showerror("Error", f"Failed to load Steganography audio: {str(e)}")
+
+    def plot_waveforms(self):
+        if self.audio1 is None or self.audio2 is None:
+            tk.messagebox.showwarning("Warning", "Please load both audio files.")
+            return
+
+        try:
+            # Ensure same sample rate
+            if self.sr1 != self.sr2:
+                tk.messagebox.showwarning("Warning", "Sample rates differ. Results may be inaccurate.")
+                # Optionally resample one audio to match (uncomment if needed)
+                # self.audio2 = librosa.resample(self.audio2, orig_sr=self.sr2, target_sr=self.sr1)
+                # self.sr2 = self.sr1
+
+            # Ensure same length by padding or truncating
+            max_len = min(len(self.audio1), len(self.audio2))
+            audio1 = self.audio1[:max_len]
+            audio2 = self.audio2[:max_len]
+
+            # Clear previous plot
+            self.ax.clear()
+
+            # Plot both waveforms overlaid
+            librosa.display.waveshow(audio1, sr=self.sr1, ax=self.ax, alpha=0.5, color='r', label='Original')
+            librosa.display.waveshow(audio2, sr=self.sr2, ax=self.ax, alpha=0.5, color='b', label='Steganography')
+            self.ax.set_title("So sánh tín hiệu âm thanh (Original vs Steganography)")
+            self.ax.set_xlabel("Thời gian (giây)")
+            self.ax.set_ylabel("Biên độ")
+            self.ax.legend()
+
+            # Update canvas
+            self.canvas.draw()
+
+        except Exception as e:
+            tk.messagebox.showerror("Error", f"Failed to plot waveforms: {str(e)}")
 
     def browse_cover(self):
         file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -110,7 +192,6 @@ class SteganographyApp:
             self.stego_path.set(file_path)
 
     def show_error_msg(self, error_msg):
-        self.progress_bar.pack_forget()
         self.msg_result.set(f"Error: {error_msg}")
         self.root.update_idletasks()
         raise ValueError(f"{error_msg}")
@@ -214,8 +295,6 @@ class SteganographyApp:
 
     def encode(self):
         self.msg_result.set("Progress...")
-        self.progress_bar.pack_forget()
-        self.progress_bar.pack(pady=10)
         self.progress_var.set(0)
         self.root.update_idletasks()
         try:
@@ -339,8 +418,6 @@ class SteganographyApp:
 
     def decode(self):
         self.msg_result.set("Progress...")
-        self.progress_bar.pack_forget()
-        self.progress_bar.pack(pady=10)
         self.progress_var.set(0)
         self.root.update_idletasks()
         try:
