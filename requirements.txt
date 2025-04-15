@@ -1,0 +1,5 @@
+wave
+numpy
+pygame
+librosa
+matplotlib

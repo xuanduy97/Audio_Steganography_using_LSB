@@ -17,7 +17,7 @@ class SteganographyApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Audio Steganography with Hidden Length")
-        self.root.geometry("600x400")
+        self.root.geometry("800x500")
 
         # Biến lưu đường dẫn
         self.cover_path = tk.StringVar()
@@ -146,7 +146,7 @@ class SteganographyApp:
         notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
 
     def on_tab_change(self, event):
-        self.msg_result.set("")
+        self.msg_result.set("Result")
         self.progress_var.set(0)
         self.play_overplay.config(state=tk.DISABLED)
         self.disable_buttons()
